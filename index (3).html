@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍉 Summer Slice — 여름 과일 베기 게임</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+    user-select: none;
+  }
+  body {
+    background: #1a1a1a;
+    position: relative;
+  }
+  /* 메인 배경 카메라 - 풀스크린, 좌우반전 */
+  #bg-webcam {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    z-index: 0;
+    background: #1a1a1a;
+  }
+  /* 가독성을 위한 미세한 어두운 오버레이 - HUD가 잘 보이도록 */
+  #bg-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.05) 70%, rgba(0,0,0,0.3) 100%);
+    z-index: 1;
+    pointer-events: none;
+  }
+  #hud {
+    position: absolute; top: 24px; left: 24px; right: 24px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    z-index: 10; pointer-events: none;
+  }
+  /* 좌상단 점수/시간 통합 박스 */
+  #left-hud {
+    background: rgba(255,255,255,0.9); padding: 18px 28px; border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25); border: 3px solid #fff;
+    display: flex; flex-direction: column; gap: 12px; min-width: 220px;
+  }
+  .hud-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  }
+  .hud-label {
+    font-size: 16px; color: #D84315; font-weight: 700; letter-spacing: 1px;
+  }
+  .hud-value {
+    font-size: 42px; font-weight: 900; color: #BF360C; line-height: 1;
+  }
+  #title-banner {
+    background: rgba(255,255,255,0.92); padding: 12px 32px; border-radius: 30px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 3px solid #fff;
+    font-size: 24px; font-weight: 900; color: #E64A19; letter-spacing: 1px;
+    text-align: center; min-width: 240px;
+  }
+  #round-label {
+    font-size: 14px; color: #5D2F00; font-weight: 700; margin-top: 4px;
+  }
+  #combo-display {
+    opacity: 0; transition: all 0.3s ease;
+    background: linear-gradient(135deg, #FF5722, #FF1744); color: white;
+    padding: 8px 22px; border-radius: 24px; font-weight: 900; font-size: 22px;
+    box-shadow: 0 6px 16px rgba(255,87,34,0.5); margin-top: 10px;
+  }
+  #webcam {
+    position: absolute; bottom: 20px; right: 20px;
+    width: 140px; height: 105px; border-radius: 12px; border: 3px solid #fff;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4); transform: scaleX(-1);
+    object-fit: cover; z-index: 5; background: #222;
+    opacity: 0.75;
+  }
+  #game-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3;
+  }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 20; padding: 40px;
+    backdrop-filter: blur(8px);
+  }
+  #start-screen { background: rgba(255, 200, 100, 0.85); }
+  #end-screen { background: rgba(255, 107, 107, 0.9); display: none; }
+  #round-intro {
+    display: none; background: rgba(255, 200, 100, 0.92);
+    position: absolute; inset: 0; align-items: center; justify-content: center;
+    flex-direction: column; z-index: 25; padding: 40px;
+    backdrop-filter: blur(10px);
+  }
+  #round-clear {
+    display: none; background: rgba(139, 195, 74, 0.92);
+    position: absolute; inset: 0; align-items: center; justify-content: center;
+    flex-direction: column; z-index: 25; padding: 40px;
+    backdrop-filter: blur(10px);
+  }
+  .big-emoji { font-size: 100px; margin-bottom: 12px; }
+  .game-title {
+    font-size: 72px; font-weight: 900; color: #BF360C; margin-bottom: 10px;
+    text-shadow: 4px 4px 0 #fff; letter-spacing: 3px;
+  }
+  .game-subtitle {
+    font-size: 24px; color: #5D2F00; margin-bottom: 36px; font-weight: 600;
+  }
+  .info-card {
+    background: rgba(255,255,255,0.95); padding: 24px 36px;
+    border-radius: 20px; margin-bottom: 28px;
+    border: 3px solid #fff; max-width: 700px; text-align: center;
+  }
+  .info-card .label {
+    font-size: 15px; color: #BF360C; font-weight: 700; margin-bottom: 10px;
+  }
+  .info-card .body {
+    font-size: 18px; color: #5D2F00; line-height: 1.7;
+  }
+  .rounds-preview {
+    display: flex; gap: 16px; margin-bottom: 30px;
+  }
+  .round-card {
+    background: rgba(255,255,255,0.9); padding: 16px 24px; border-radius: 16px;
+    border: 3px solid #fff; text-align: center; min-width: 130px;
+  }
+  .round-card .rn { font-size: 14px; color: #BF360C; font-weight: 700; }
+  .round-card .rt { font-size: 28px; color: #E64A19; font-weight: 900; line-height: 1.1; margin: 4px 0; }
+  .round-card .rg { font-size: 14px; color: #5D2F00; font-weight: 600; }
+  .btn {
+    background: linear-gradient(135deg, #FF6B6B, #FF5722);
+    color: white; border: none; padding: 20px 60px;
+    font-size: 26px; font-weight: 900; border-radius: 50px;
+    cursor: pointer; box-shadow: 0 10px 28px rgba(255,87,34,0.5);
+    letter-spacing: 3px; transition: transform 0.2s;
+    font-family: inherit;
+  }
+  .btn:hover { transform: translateY(-3px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.6; cursor: wait; }
+
+  /* 폼 옵션 버튼 */
+  .opt-btn {
+    background: #FFF3E0; color: #BF360C; border: 2px solid #FFB74D;
+    padding: 10px 20px; font-size: 17px; font-weight: 700;
+    border-radius: 12px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .opt-btn:hover { background: #FFE0B2; transform: translateY(-2px); }
+  .opt-btn.selected {
+    background: linear-gradient(135deg, #FF6B6B, #FF5722); color: white;
+    border-color: #fff; box-shadow: 0 4px 12px rgba(255,87,34,0.4);
+  }
+  #form-start-btn:disabled { background: #ccc; color: #888; box-shadow: none; }
+
+  /* 랭킹 리스트 항목 */
+  .rank-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; background: #FFF3E0; border-radius: 10px;
+    font-size: 14px;
+  }
+  .rank-item.rank-1 { background: linear-gradient(135deg, #FFD700, #FFA500); color: white; font-weight: 900; }
+  .rank-item.rank-2 { background: linear-gradient(135deg, #E0E0E0, #BDBDBD); color: #424242; font-weight: 800; }
+  .rank-item.rank-3 { background: linear-gradient(135deg, #FFAB91, #FF7043); color: white; font-weight: 800; }
+  .rank-num { font-weight: 900; min-width: 22px; text-align: center; }
+  .rank-name { flex: 1; font-weight: 700; color: #BF360C; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-item.rank-1 .rank-name, .rank-item.rank-2 .rank-name, .rank-item.rank-3 .rank-name { color: inherit; }
+  .rank-class { font-size: 11px; opacity: 0.8; }
+  .rank-score { font-weight: 900; }
+
+  /* 종료 화면 랭킹 - 더 큰 사이즈 + 본인 강조 */
+  .end-rank-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 14px; background: #FFF3E0; border-radius: 12px;
+    font-size: 16px; transition: all 0.3s;
+  }
+  .end-rank-item.rank-1 { background: linear-gradient(135deg, #FFD700, #FFA500); color: white; font-weight: 900; }
+  .end-rank-item.rank-2 { background: linear-gradient(135deg, #E0E0E0, #BDBDBD); color: #424242; font-weight: 800; }
+  .end-rank-item.rank-3 { background: linear-gradient(135deg, #FFAB91, #FF7043); color: white; font-weight: 800; }
+  .end-rank-item.is-me {
+    box-shadow: 0 0 0 4px #FF5722, 0 6px 16px rgba(255,87,34,0.4);
+    transform: scale(1.05);
+    animation: pulse-me 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-me {
+    0%, 100% { box-shadow: 0 0 0 4px #FF5722, 0 6px 16px rgba(255,87,34,0.4); }
+    50% { box-shadow: 0 0 0 6px #FF5722, 0 8px 22px rgba(255,87,34,0.6); }
+  }
+  .end-rank-num { font-weight: 900; min-width: 30px; text-align: center; font-size: 20px; }
+  .end-rank-name { flex: 1; font-weight: 700; color: #BF360C; }
+  .end-rank-item.rank-1 .end-rank-name, .end-rank-item.rank-2 .end-rank-name, .end-rank-item.rank-3 .end-rank-name { color: inherit; }
+  .end-rank-name .name-line { font-size: 17px; font-weight: 900; }
+  .end-rank-name .class-line { font-size: 12px; opacity: 0.85; margin-top: 1px; }
+  .end-rank-score { font-weight: 900; font-size: 22px; }
+  .me-badge {
+    background: #FF5722; color: white; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 900; margin-left: 6px; letter-spacing: 1px;
+  }
+  #cam-status { margin-top: 18px; font-size: 14px; color: #5D2F00; }
+  #final-score-card {
+    background: white; padding: 30px 60px; border-radius: 24px;
+    margin-bottom: 30px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,0.2);
+  }
+  #final-score-card .label {
+    font-size: 15px; color: #BF360C; font-weight: 700; letter-spacing: 2px;
+  }
+  #final-score {
+    font-size: 80px; font-weight: 900; color: #E64A19; line-height: 1;
+  }
+  #final-stats { font-size: 16px; color: #5D2F00; margin-top: 10px; }
+  .end-title {
+    font-size: 60px; font-weight: 900; color: white;
+    margin-bottom: 12px; text-shadow: 4px 4px 0 #BF360C;
+  }
+  #end-emoji { font-size: 90px; margin-bottom: 12px; }
+  #restart-btn { background: white; color: #E64A19; }
+  #fs-hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: rgba(93, 47, 0, 0.6); z-index: 30;
+  }
+  .ri-round-num {
+    font-size: 28px; font-weight: 900; color: #BF360C; letter-spacing: 4px;
+    margin-bottom: 8px;
+  }
+  .ri-big-num {
+    font-size: 140px; font-weight: 900; color: #E64A19;
+    line-height: 1; text-shadow: 5px 5px 0 #fff; margin-bottom: 16px;
+  }
+  .ri-goal {
+    background: white; padding: 22px 50px; border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15); text-align: center;
+    margin-bottom: 24px;
+  }
+  .ri-goal-label { font-size: 14px; color: #BF360C; font-weight: 700; letter-spacing: 2px; }
+  .ri-goal-value { font-size: 36px; font-weight: 900; color: #E64A19; line-height: 1.2; }
+  .ri-countdown {
+    font-size: 140px; font-weight: 900; color: white;
+    text-shadow: 5px 5px 0 #BF360C; line-height: 1;
+  }
+  .rc-title {
+    font-size: 70px; font-weight: 900; color: white;
+    text-shadow: 4px 4px 0 #2E7D32; letter-spacing: 3px; margin-bottom: 16px;
+  }
+  .rc-sub {
+    font-size: 28px; color: white; font-weight: 700; margin-bottom: 24px;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+  }
+</style>
+</head>
+<body>
+
+<video id="bg-webcam" autoplay playsinline muted></video>
+<div id="bg-overlay"></div>
+
+<div id="hud">
+  <div id="left-hud">
+    <div class="hud-row">
+      <span class="hud-label">점수</span>
+      <span id="score" class="hud-value">0</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">남은시간</span>
+      <span id="timer" class="hud-value">60</span>
+    </div>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <div id="title-banner">🍉 과일 썰기 게임 🍅</div>
+    <div id="combo-display"></div>
+  </div>
+  <div id="player-badge" style="background: rgba(255,255,255,0.9); padding: 14px 22px; border-radius: 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); border: 3px solid #fff; text-align: right; min-width: 180px;">
+    <div style="font-size: 13px; color: #D84315; font-weight: 700;">참여 반</div>
+    <div id="player-class-display" style="font-size: 22px; font-weight: 900; color: #BF360C; line-height: 1.2;">-</div>
+  </div>
+</div>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- 우하단 TOP 5 랭킹 -->
+<div id="ranking-board" style="position: absolute; bottom: 20px; right: 20px; width: 280px; background: rgba(255,255,255,0.92); border-radius: 18px; padding: 16px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); border: 3px solid #fff; z-index: 6;">
+  <div style="font-size: 14px; color: #D84315; font-weight: 700; letter-spacing: 2px; margin-bottom: 10px; text-align: center;">🏆 반 대항 TOP 5</div>
+  <div id="ranking-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+</div>
+
+<!-- 플레이어 정보 입력 화면 -->
+<div id="player-form" class="overlay" style="display: none; background: rgba(255, 200, 100, 0.92);">
+  <div style="font-size: 60px; margin-bottom: 8px;">🎯</div>
+  <div style="font-size: 44px; font-weight: 900; color: #BF360C; margin-bottom: 6px; text-shadow: 3px 3px 0 #fff; letter-spacing: 2px;">반 선택</div>
+  <div style="font-size: 18px; color: #5D2F00; margin-bottom: 24px; font-weight: 600;">우리 반을 선택하고 반 대항전에 참여하세요!</div>
+
+  <div style="background: rgba(255,255,255,0.95); padding: 28px 36px; border-radius: 20px; border: 3px solid #fff; max-width: 700px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);">
+    <!-- Step 1: 학부 -->
+    <div style="margin-bottom: 18px;">
+      <div style="font-size: 14px; color: #BF360C; font-weight: 700; margin-bottom: 8px;">▸ 학부 선택</div>
+      <div id="dept-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- Step 2: 학년 (조건부) -->
+    <div id="grade-step" style="margin-bottom: 18px; display: none;">
+      <div style="font-size: 14px; color: #BF360C; font-weight: 700; margin-bottom: 8px;">▸ 학년 선택</div>
+      <div id="grade-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- Step 3: 반 (조건부) -->
+    <div id="class-step" style="margin-bottom: 8px; display: none;">
+      <div style="font-size: 14px; color: #BF360C; font-weight: 700; margin-bottom: 8px;">▸ 반 선택</div>
+      <div id="class-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 12px; margin-top: 24px;">
+    <button id="form-back-btn" class="btn" style="background: rgba(255,255,255,0.9); color: #BF360C; padding: 14px 32px; font-size: 18px;">← 뒤로</button>
+    <button id="form-start-btn" class="btn" style="padding: 14px 40px; font-size: 20px;" disabled>게임 시작!</button>
+  </div>
+</div>
+
+<div id="start-screen" class="overlay">
+  <div class="big-emoji">🍉🍅🍊🥝🍇</div>
+  <div class="game-title">과일 썰기 게임</div>
+  <div class="game-subtitle">반 대항전! 60초 안에 우리 반 점수를 올려요 🏆</div>
+
+  <div style="display: flex; gap: 20px; margin-bottom: 28px; flex-wrap: wrap; justify-content: center;">
+    <div class="object-card" style="background: rgba(255,255,255,0.95); padding: 16px 24px; border-radius: 18px; border: 3px solid #4CAF50; text-align: center; min-width: 140px;">
+      <div style="font-size: 50px; line-height: 1;">🍉</div>
+      <div style="font-size: 13px; color: #2E7D32; font-weight: 700; margin-top: 4px;">과일</div>
+      <div style="font-size: 24px; color: #2E7D32; font-weight: 900;">+30점</div>
+    </div>
+    <div class="object-card" style="background: rgba(255,255,255,0.95); padding: 16px 24px; border-radius: 18px; border: 3px solid #FFD600; text-align: center; min-width: 140px;">
+      <div style="font-size: 50px; line-height: 1;">🎁</div>
+      <div style="font-size: 13px; color: #F57F17; font-weight: 700; margin-top: 4px;">선물상자</div>
+      <div style="font-size: 24px; color: #F57F17; font-weight: 900;">+150점</div>
+    </div>
+  </div>
+
+  <div class="info-card">
+    <div class="label">▸ 게임 방법 ◂</div>
+    <div class="body">카메라 앞에서 손이나 팔을 크게 휘둘러 과일을 베어내세요!<br/>반 친구들과 함께 점수를 모아 최고의 반이 되어보세요!</div>
+  </div>
+  <button id="start-btn" class="btn">우리 반 선택하기</button>
+  <div id="cam-status"></div>
+</div>
+
+<div id="round-intro">
+  <div class="ri-round-num">START</div>
+  <div id="ri-num" class="ri-big-num">🎮</div>
+  <div id="ri-countdown" class="ri-countdown">3</div>
+</div>
+
+<div id="end-screen" class="overlay">
+  <div id="end-emoji" style="font-size: 70px; margin-bottom: 6px;">🏆</div>
+  <div id="end-title-text" class="end-title" style="font-size: 48px; margin-bottom: 16px;">게임 종료!</div>
+
+  <!-- 점수 + 등수 카드 -->
+  <div id="final-score-card" style="display: flex; gap: 20px; align-items: stretch; padding: 20px 30px; margin-bottom: 18px;">
+    <div style="text-align: center;">
+      <div class="label" id="end-result-label" style="font-size: 13px;">최종 점수</div>
+      <div id="final-score" style="font-size: 64px;">0</div>
+      <div id="final-stats"></div>
+    </div>
+    <div style="width: 3px; background: #FFB74D; border-radius: 2px;"></div>
+    <div style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
+      <div class="label" style="font-size: 13px; color: #BF360C; font-weight: 700; letter-spacing: 2px;">현재 등수</div>
+      <div id="final-rank" style="font-size: 64px; font-weight: 900; color: #E64A19; line-height: 1;">-</div>
+      <div id="final-rank-sub" style="font-size: 14px; color: #5D2F00; margin-top: 4px;"></div>
+    </div>
+  </div>
+
+  <!-- TOP 5 리스트 (본인 강조) -->
+  <div id="end-ranking" style="background: rgba(255,255,255,0.96); padding: 18px 22px; border-radius: 18px; border: 3px solid #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.15); width: 480px; max-width: 90vw; margin-bottom: 22px;">
+    <div style="font-size: 14px; color: #BF360C; font-weight: 700; letter-spacing: 2px; margin-bottom: 10px; text-align: center;">🏆 TOP 5 랭킹</div>
+    <div id="end-ranking-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+    <div id="end-outside-rank" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 2px dashed #FFB74D; text-align: center; font-size: 14px; color: #5D2F00; font-weight: 700;"></div>
+  </div>
+
+  <div style="display: flex; gap: 16px;">
+    <button id="restart-btn" class="btn" style="padding: 16px 36px; font-size: 20px;">🔄 한번 더!</button>
+    <button id="exit-btn" class="btn" style="padding: 16px 36px; font-size: 20px; background: rgba(255,255,255,0.95); color: #BF360C;">🚪 종료</button>
+  </div>
+</div>
+
+<div id="fs-hint">F11: 전체화면 · ESC: 종료</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+  const video = document.getElementById('bg-webcam');
+  const scoreEl = document.getElementById('score');
+  const timerEl = document.getElementById('timer');
+  const comboEl = document.getElementById('combo-display');
+  const startScreen = document.getElementById('start-screen');
+  const endScreen = document.getElementById('end-screen');
+  const startBtn = document.getElementById('start-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  const finalScoreEl = document.getElementById('final-score');
+  const finalStatsEl = document.getElementById('final-stats');
+  const camStatus = document.getElementById('cam-status');
+  const roundIntro = document.getElementById('round-intro');
+  const riNum = document.getElementById('ri-num');
+  const riCountdown = document.getElementById('ri-countdown');
+  const endEmoji = document.getElementById('end-emoji');
+  const endTitleText = document.getElementById('end-title-text');
+  const endResultLabel = document.getElementById('end-result-label');
+
+  // ===== 게임 설정 (1라운드 60초, 폭탄 없음) =====
+  const GAME_CONFIG = {
+    time: 60,
+    spawnStart: 1000, spawnMin: 600,  // 스폰 간격 늘림 (더 여유롭게)
+    doubleChance: 0.2,
+    giftChance: 0.08      // 선물상자 등장 확률
+  };
+
+  // ===== ADAPTIVE SIZING =====
+  // 화면 크기에 따라 게임 요소 크기를 자동 조정
+  // 기준: 1920×1080 (FHD)에서 적정 크기로 보이도록 설정
+  let W = 0, H = 0;
+  let scale = 1; // 화면 크기 비례 스케일
+  let sizing = {};
+
+  function computeSizing() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    // 짧은 쪽 기준으로 스케일 (세로 모니터/울트라와이드 대응)
+    const shorter = Math.min(W, H);
+    const baseShorter = 1080; // 기준 화면의 짧은 쪽
+    scale = shorter / baseShorter;
+    // 너무 작거나 너무 큰 화면 보호
+    scale = Math.max(0.5, Math.min(scale, 2.5));
+
+    sizing = {
+      fruitBase: 200 * scale,   // 과일 크기 살짝 키움
+      velocity: 14 * Math.sqrt(scale),
+      gravity: 0.22 * scale,  // 중력 더 줄여서 과일이 더 천천히
+      spawnMargin: 110 * scale,
+      slashWidth: 26 * scale,    // 슬래시 두께도 살짝 키움
+      particleSize: 13 * scale,
+      popupFont: 50 * scale,
+      collisionRatio: 0.55
+    };
+  }
+
+  function resize() {
+    computeSizing();
+    canvas.width = W * devicePixelRatio;
+    canvas.height = H * devicePixelRatio;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Game state
+  let fruits = [];
+  let particles = [];
+  let slashTrail = [];
+  let popups = [];
+  let score = 0;
+  let combo = 0;
+  let comboTimer = 0;
+  let totalSliced = 0;
+  let timeLeft = 60;
+  let gameRunning = false;
+  let lastSpawn = 0;
+  let spawnInterval = 900;
+  let gameTimer = null;
+  let roundStartTime = 0;
+
+  // Motion detection
+  let motionCanvas = document.createElement('canvas');
+  let motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+  let prevFrame = null;
+  let motionPoints = [];
+  let lastMotionPoint = null;
+  let smoothedPoint = null;
+  let motionVelocity = { x: 0, y: 0 };
+  let stillFrames = 0;
+
+  // ===== 스와이프 추적 (일자 슬래시용) =====
+  let activeSlash = null;        // 현재 진행중인 슬래시 {startX, startY, endX, endY}
+  let completedSlashes = [];     // 완성된 일자 슬래시들 (페이드 아웃 중)
+  let swipeFrameCount = 0;       // 현재 스와이프가 몇 프레임째인지
+  let swipeStartPoint = null;    // 스와이프 시작점
+
+  const FRUIT_TYPES = [
+    { emoji: '🍉', juice: '#FF6B8A', sizeMul: 1.0 },
+    { emoji: '🍅', juice: '#FF5252', sizeMul: 0.85 },
+    { emoji: '🍊', juice: '#FFB347', sizeMul: 0.85 },
+    { emoji: '🥝', juice: '#AED581', sizeMul: 0.82 },
+    { emoji: '🍇', juice: '#9D4EDD', sizeMul: 0.82 },
+    { emoji: '🍋', juice: '#FFEA00', sizeMul: 0.82 },
+    { emoji: '🍑', juice: '#FFC9CA', sizeMul: 0.85 },
+    { emoji: '🍓', juice: '#FF5252', sizeMul: 0.78 }
+  ];
+
+  // 오브젝트 종류
+  const OBJ = {
+    FRUIT: 'fruit',  // +30
+    BOMB:  'bomb',   // -100
+    GIFT:  'gift'    // +150
+  };
+
+  function spawnObject() {
+    // 어떤 종류 spawn할지 결정 (폭탄 제거, 과일 or 선물)
+    const roll = Math.random();
+    let kind;
+    if (roll < GAME_CONFIG.giftChance) kind = OBJ.GIFT;
+    else kind = OBJ.FRUIT;
+
+    const fromLeft = Math.random() < 0.5;
+    const x = fromLeft
+      ? Math.random() * W * 0.3 + sizing.spawnMargin
+      : W - (Math.random() * W * 0.3 + sizing.spawnMargin);
+    const vx = fromLeft ? (Math.random() * 2.0 + 1.5) : -(Math.random() * 2.0 + 1.5);  // 좌우 속도도 살짝 감소
+
+    const targetHeightRatio = 0.65 + Math.random() * 0.2;
+    const targetHeight = H * targetHeightRatio;
+    const requiredVel = Math.sqrt(2 * sizing.gravity * targetHeight);
+    const vy = -requiredVel;
+    const heightFactor = Math.sqrt(H / 1080);
+
+    let type, size, sliceColor;
+    if (kind === OBJ.FRUIT) {
+      type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+      size = sizing.fruitBase * type.sizeMul;
+      sliceColor = type.juice;
+    } else { // GIFT
+      type = { emoji: '🎁', juice: '#FFD600' };
+      size = sizing.fruitBase * 0.95;
+      sliceColor = '#FFD600';
+    }
+
+    fruits.push({
+      x: x, y: H + 50 * scale, vx: vx * heightFactor, vy: vy,
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.12,  // 회전도 살짝 완만하게
+      type: type,
+      kind: kind,
+      sliceColor: sliceColor,
+      size: size,
+      sliced: false
+    });
+  }
+
+  function sliceFruit(fruit) {
+    if (fruit.sliced) return;
+    fruit.sliced = true;
+
+    // 종류별 점수 (폭탄 제거됨)
+    let pts;
+    let popupColor;
+    if (fruit.kind === OBJ.GIFT) {
+      pts = 150;
+      popupColor = '#F57F17';
+    } else {
+      pts = 30;
+      popupColor = '#BF360C';
+    }
+    combo++;
+    comboTimer = 60;
+    totalSliced++;
+
+    score += pts;
+    scoreEl.textContent = score;
+
+    // 파티클 효과
+    const particleCount = fruit.kind === OBJ.GIFT ? 35 : 22;
+    for (let i = 0; i < particleCount; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = (Math.random() * 9 + 3) * Math.sqrt(scale);
+      particles.push({
+        x: fruit.x, y: fruit.y,
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 2,
+        life: 1, size: (Math.random() * sizing.particleSize + 5),
+        color: fruit.sliceColor
+      });
+    }
+
+    // 청크 (조각 비행)
+    for (let i = 0; i < 2; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      particles.push({
+        x: fruit.x, y: fruit.y,
+        vx: Math.cos(ang) * 4 * Math.sqrt(scale),
+        vy: (Math.sin(ang) * 4 - 3) * Math.sqrt(scale),
+        life: 1.5, size: fruit.size * 0.45,
+        emoji: fruit.type.emoji, rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 0.3,
+        isChunk: true, gravity: sizing.gravity
+      });
+    }
+
+    // 점수 팝업
+    popups.push({
+      x: fruit.x, y: fruit.y - 20 * scale,
+      text: '+' + pts, life: 1,
+      color: popupColor
+    });
+
+    // 콤보 표시
+    if (combo >= 2) {
+      comboEl.style.opacity = '1';
+      comboEl.style.transform = 'scale(' + (1 + Math.min(combo * 0.04, 0.4)) + ')';
+      comboEl.textContent = combo + ' COMBO! 🔥';
+    }
+  }
+
+  async function initCam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false
+      });
+      video.srcObject = stream;
+      camStatus.textContent = '✓ 카메라 연결됨 — 시작 준비 완료';
+      camStatus.style.color = '#2E7D32';
+      motionCanvas.width = 80;
+      motionCanvas.height = 60;
+      return true;
+    } catch (e) {
+      camStatus.textContent = '⚠ 카메라 접근 실패: ' + (e.message || e.name) + ' — 마우스로 플레이 가능';
+      camStatus.style.color = '#BF360C';
+      return false;
+    }
+  }
+
+  function detectMotion() {
+    if (!video.videoWidth) return;
+    motionCtx.save();
+    motionCtx.scale(-1, 1);
+    motionCtx.drawImage(video, -motionCanvas.width, 0, motionCanvas.width, motionCanvas.height);
+    motionCtx.restore();
+    const curr = motionCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
+
+    if (!prevFrame) { prevFrame = curr; return; }
+
+    motionPoints = [];
+    const threshold = 18; // 대폭 낮춤 - 멀리서 손 움직여도 인식되도록
+    const cellSize = 6;
+    const cols = Math.floor(motionCanvas.width / cellSize);
+    const rows = Math.floor(motionCanvas.height / cellSize);
+    const mw = motionCanvas.width;
+
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        let diffSum = 0;
+        const baseX = cx * cellSize, baseY = cy * cellSize;
+        for (let s = 0; s < 4; s++) {
+          const sx = baseX + (s % 2) * Math.floor(cellSize / 2);
+          const sy = baseY + Math.floor(s / 2) * Math.floor(cellSize / 2);
+          const idx = (sy * mw + sx) * 4;
+          const dr = Math.abs(curr.data[idx] - prevFrame.data[idx]);
+          const dg = Math.abs(curr.data[idx+1] - prevFrame.data[idx+1]);
+          const db = Math.abs(curr.data[idx+2] - prevFrame.data[idx+2]);
+          diffSum += dr + dg + db;
+        }
+        const avgDiff = diffSum / 4;
+        if (avgDiff > threshold * 3) {
+          motionPoints.push({
+            x: ((cx + 0.5) / cols) * W,
+            y: ((cy + 0.5) / rows) * H,
+            intensity: avgDiff
+          });
+        }
+      }
+    }
+    prevFrame = curr;
+
+    // ===== 전체 움직임 인식 (특수학교 친화) =====
+    // 손날만이 아니라 팔, 몸 어디든 움직이면 다 반응. 큰 동작/작은 동작 모두 환영
+    if (motionPoints.length < 1) {
+      finalizeSwipe();
+      stillFrames++;
+      if (stillFrames > 5) {
+        smoothedPoint = null;
+        motionVelocity = { x: 0, y: 0 };
+        lastMotionPoint = null;
+      }
+      return;
+    }
+
+    // 움직임 영역의 무게중심
+    let sx = 0, sy = 0, total = 0;
+    motionPoints.forEach(p => { sx += p.x * p.intensity; sy += p.y * p.intensity; total += p.intensity; });
+    const rawX = sx / total, rawY = sy / total;
+
+    // Lowpass filter
+    if (!smoothedPoint) {
+      smoothedPoint = { x: rawX, y: rawY };
+    } else {
+      const dist = Math.hypot(rawX - smoothedPoint.x, rawY - smoothedPoint.y);
+      const responsiveness = Math.min(0.85, 0.4 + dist / 300);
+      smoothedPoint.x = smoothedPoint.x * (1 - responsiveness) + rawX * responsiveness;
+      smoothedPoint.y = smoothedPoint.y * (1 - responsiveness) + rawY * responsiveness;
+    }
+
+    stillFrames = 0;
+
+    // 속도 계산
+    let speed = 0;
+    if (lastMotionPoint) {
+      motionVelocity.x = smoothedPoint.x - lastMotionPoint.x;
+      motionVelocity.y = smoothedPoint.y - lastMotionPoint.y;
+      speed = Math.hypot(motionVelocity.x, motionVelocity.y);
+    }
+
+    // ===== 스와이프 기반 일자 슬래시 =====
+    // 임계값을 낮춰서 부드러운 움직임에도 슬래시가 그려지게
+    const SWIPE_START_SPEED = 4;  // 대폭 낮춤 - 천천히 움직여도 슬래시 인식
+    const SWIPE_END_SPEED = 2;    // 종료 속도도 낮춤
+
+    if (!activeSlash) {
+      if (speed > SWIPE_START_SPEED && lastMotionPoint) {
+        activeSlash = {
+          startX: lastMotionPoint.x, startY: lastMotionPoint.y,
+          endX: smoothedPoint.x, endY: smoothedPoint.y
+        };
+        swipeFrameCount = 1;
+      }
+    } else {
+      swipeFrameCount++;
+      activeSlash.endX = smoothedPoint.x;
+      activeSlash.endY = smoothedPoint.y;
+
+      const swipeDx = activeSlash.endX - activeSlash.startX;
+      const swipeDy = activeSlash.endY - activeSlash.startY;
+      const swipeLen = Math.hypot(swipeDx, swipeDy);
+      let directionChange = 0;
+      if (swipeLen > 15 && speed > 1) {
+        const dot = (swipeDx * motionVelocity.x + swipeDy * motionVelocity.y) / (swipeLen * speed);
+        directionChange = 1 - dot;
+      }
+
+      if (speed < SWIPE_END_SPEED || directionChange > 0.6 || swipeFrameCount > 15) {
+        finalizeSwipe();
+      }
+    }
+
+    lastMotionPoint = { x: smoothedPoint.x, y: smoothedPoint.y };
+
+    // 움직임 영역과 과일 충돌 (모든 motion 포인트와 검사 - 큰 동작에도 잘 베임)
+    fruits.forEach(f => {
+      if (f.sliced) return;
+      for (const p of motionPoints) {
+        const dx = f.x - p.x, dy = f.y - p.y;
+        if (dx * dx + dy * dy < (f.size * sizing.collisionRatio) * (f.size * sizing.collisionRatio)) {
+          sliceFruit(f);
+          return;
+        }
+      }
+    });
+
+    if (activeSlash) {
+      checkSlashCollision(activeSlash);
+    }
+  }
+
+  function finalizeSwipe() {
+    if (activeSlash) {
+      const len = Math.hypot(
+        activeSlash.endX - activeSlash.startX,
+        activeSlash.endY - activeSlash.startY
+      );
+      if (len > 25) {  // 짧은 움직임도 슬래시로 인정 (거리 무관하게)
+        checkSlashCollision(activeSlash);
+        completedSlashes.push({
+          startX: activeSlash.startX, startY: activeSlash.startY,
+          endX: activeSlash.endX, endY: activeSlash.endY,
+          life: 1,
+          sparkles: spawnSparkles(activeSlash) // 반짝이 추가
+        });
+        if (completedSlashes.length > 5) completedSlashes.shift();
+      }
+      activeSlash = null;
+      swipeFrameCount = 0;
+    }
+  }
+
+  function spawnSparkles(slash) {
+    // 슬래시 경로 위에 반짝이는 별/포인트 생성
+    const sparkles = [];
+    const dx = slash.endX - slash.startX;
+    const dy = slash.endY - slash.startY;
+    const len = Math.hypot(dx, dy);
+    const count = Math.floor(len / 40) + 3; // 길수록 더 많은 반짝이
+    for (let i = 0; i < count; i++) {
+      const t = Math.random();
+      const px = slash.startX + dx * t;
+      const py = slash.startY + dy * t;
+      // 슬래시 선에서 수직으로 약간 흩어지게
+      const perpX = -dy / len, perpY = dx / len;
+      const spread = (Math.random() - 0.5) * 40 * scale;
+      sparkles.push({
+        x: px + perpX * spread,
+        y: py + perpY * spread,
+        vx: (Math.random() - 0.5) * 3,
+        vy: (Math.random() - 0.5) * 3 - 1,
+        size: (Math.random() * 8 + 4) * scale,
+        life: 1,
+        rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 0.3
+      });
+    }
+    return sparkles;
+  }
+
+  function checkSlashCollision(slash) {
+    const dx = slash.endX - slash.startX;
+    const dy = slash.endY - slash.startY;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1) return;
+
+    fruits.forEach(f => {
+      if (f.sliced) return;
+      const t = Math.max(0, Math.min(1,
+        ((f.x - slash.startX) * dx + (f.y - slash.startY) * dy) / lenSq
+      ));
+      const closestX = slash.startX + t * dx;
+      const closestY = slash.startY + t * dy;
+      const ddx = f.x - closestX, ddy = f.y - closestY;
+      const radius = f.size * sizing.collisionRatio;
+      if (ddx * ddx + ddy * ddy < radius * radius) {
+        sliceFruit(f);
+      }
+    });
+  }
+
+    canvas.addEventListener('mousemove', (e) => {
+    const x = e.clientX, y = e.clientY;
+    slashTrail.push({ x: x, y: y, life: 1 });
+    if (slashTrail.length > 35) slashTrail.splice(0, slashTrail.length - 35);
+    fruits.forEach(f => {
+      if (f.sliced) return;
+      const dx = f.x - x, dy = f.y - y;
+      if (dx * dx + dy * dy < (f.size * 0.5) * (f.size * 0.5)) {
+        sliceFruit(f);
+      }
+    });
+  });
+
+  function update(dt) {
+    // dt를 60fps 기준으로 정규화 (16.67ms = 1.0). 프레임이 낮아도 동일한 속도 유지
+    const dtScale = Math.min(dt / 16.67, 3);
+
+    lastSpawn += dt;
+    if (lastSpawn > spawnInterval) {
+      lastSpawn = 0;
+      spawnObject();
+      if (Math.random() < GAME_CONFIG.doubleChance) spawnObject();
+    }
+    const progress = 1 - (timeLeft / GAME_CONFIG.time);
+    spawnInterval = GAME_CONFIG.spawnStart - (GAME_CONFIG.spawnStart - GAME_CONFIG.spawnMin) * progress;
+
+    fruits.forEach(f => {
+      f.x += f.vx * dtScale;
+      f.y += f.vy * dtScale;
+      f.vy += sizing.gravity * dtScale;
+      f.rot += f.vrot * dtScale;
+    });
+    fruits = fruits.filter(f => f.y < H + 150 * scale && !f.sliced);
+
+    particles.forEach(p => {
+      p.x += p.vx * dtScale;
+      p.y += p.vy * dtScale;
+      p.vy += (p.gravity || (0.25 * scale)) * dtScale;
+      p.life -= 0.025 * dtScale;
+      if (p.isChunk) p.rot += p.vrot * dtScale;
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    slashTrail.forEach(s => s.life -= 0.05 * dtScale);
+    slashTrail = slashTrail.filter(s => s.life > 0);
+
+    // 완성된 일자 슬래시 페이드 아웃 + 반짝이 업데이트
+    completedSlashes.forEach(s => {
+      s.life -= 0.04 * dtScale;
+      if (s.sparkles) {
+        s.sparkles.forEach(sp => {
+          sp.x += sp.vx * dtScale;
+          sp.y += sp.vy * dtScale;
+          sp.vy += 0.15 * dtScale; // 약한 중력으로 살짝 떨어짐
+          sp.rot += sp.vrot * dtScale;
+          sp.life -= 0.035 * dtScale;
+        });
+      }
+    });
+    completedSlashes = completedSlashes.filter(s => s.life > 0);
+
+    popups.forEach(p => { p.y -= 1.8 * scale * dtScale; p.life -= 0.02 * dtScale; });
+    popups = popups.filter(p => p.life > 0);
+
+    if (comboTimer > 0) comboTimer -= dtScale;
+    else if (combo > 0) {
+      combo = 0;
+      comboEl.style.opacity = '0';
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    particles.forEach(p => {
+      if (p.isChunk) return;
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    fruits.forEach(f => {
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.rot);
+      ctx.font = f.size + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // shadowBlur는 매 프레임 GPU에 부담이 커서 제거.
+      // 대신 살짝 오프셋된 어두운 텍스트로 그림자 효과 흉내
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillText(f.type.emoji, 0, 5 * scale);
+      ctx.fillStyle = '#000';
+      ctx.fillText(f.type.emoji, 0, 0);
+      ctx.restore();
+    });
+
+    particles.forEach(p => {
+      if (!p.isChunk) return;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, p.life);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.font = p.size + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.emoji, 0, 0);
+      ctx.restore();
+    });
+
+    // ===== 슬래시 렌더링 =====
+    // 1) 완성된 일자 슬래시들 (페이드 아웃)
+    function drawSlashLine(s, lifeOverride) {
+      const life = lifeOverride !== undefined ? lifeOverride : s.life;
+      if (life <= 0) return;
+      // 외곽 글로우
+      ctx.strokeStyle = 'rgba(255, 235, 100, ' + (life * 0.45) + ')';
+      ctx.lineWidth = sizing.slashWidth * 1.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(s.startX, s.startY);
+      ctx.lineTo(s.endX, s.endY);
+      ctx.stroke();
+      // 메인 흰색
+      ctx.strokeStyle = 'rgba(255, 255, 255, ' + (life * 0.95) + ')';
+      ctx.lineWidth = sizing.slashWidth;
+      ctx.beginPath();
+      ctx.moveTo(s.startX, s.startY);
+      ctx.lineTo(s.endX, s.endY);
+      ctx.stroke();
+      // 코어
+      ctx.strokeStyle = 'rgba(255, 255, 230, ' + life + ')';
+      ctx.lineWidth = sizing.slashWidth * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(s.startX, s.startY);
+      ctx.lineTo(s.endX, s.endY);
+      ctx.stroke();
+    }
+
+    // 완성된 일자 슬래시 (페이드)
+    completedSlashes.forEach(s => {
+      drawSlashLine(s);
+      // 반짝이 그리기
+      if (s.sparkles) {
+        s.sparkles.forEach(sp => {
+          if (sp.life <= 0) return;
+          ctx.save();
+          ctx.globalAlpha = sp.life;
+          ctx.translate(sp.x, sp.y);
+          ctx.rotate(sp.rot);
+          // 4갈래 별 모양 빛
+          const sz = sp.size;
+          ctx.fillStyle = 'rgba(255, 255, 220, ' + sp.life + ')';
+          ctx.beginPath();
+          ctx.moveTo(0, -sz);
+          ctx.lineTo(sz * 0.3, -sz * 0.3);
+          ctx.lineTo(sz, 0);
+          ctx.lineTo(sz * 0.3, sz * 0.3);
+          ctx.lineTo(0, sz);
+          ctx.lineTo(-sz * 0.3, sz * 0.3);
+          ctx.lineTo(-sz, 0);
+          ctx.lineTo(-sz * 0.3, -sz * 0.3);
+          ctx.closePath();
+          ctx.fill();
+          // 중심 흰점
+          ctx.fillStyle = 'rgba(255, 255, 255, ' + sp.life + ')';
+          ctx.beginPath();
+          ctx.arc(0, 0, sz * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+    });
+
+    // 진행중 활성 슬래시 (가장 밝게)
+    if (activeSlash) {
+      drawSlashLine(activeSlash, 1);
+    }
+
+    // 마우스용 폴리라인 슬래시
+    if (slashTrail.length > 1) {
+      const lastLife = slashTrail[slashTrail.length - 1].life;
+      ctx.strokeStyle = 'rgba(255, 235, 100, ' + (lastLife * 0.4) + ')';
+      ctx.lineWidth = sizing.slashWidth * 1.3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(slashTrail[0].x, slashTrail[0].y);
+      for (let i = 1; i < slashTrail.length; i++) {
+        ctx.lineTo(slashTrail[i].x, slashTrail[i].y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, ' + (lastLife * 0.95) + ')';
+      ctx.lineWidth = sizing.slashWidth;
+      ctx.beginPath();
+      ctx.moveTo(slashTrail[0].x, slashTrail[0].y);
+      for (let i = 1; i < slashTrail.length; i++) {
+        ctx.lineTo(slashTrail[i].x, slashTrail[i].y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 255, 220, ' + (lastLife) + ')';
+      ctx.lineWidth = sizing.slashWidth * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(slashTrail[0].x, slashTrail[0].y);
+      for (let i = 1; i < slashTrail.length; i++) {
+        ctx.lineTo(slashTrail[i].x, slashTrail[i].y);
+      }
+      ctx.stroke();
+    }
+
+    popups.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.font = 'bold ' + sizing.popupFont + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 5;
+      ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillText(p.text, p.x, p.y);
+      ctx.restore();
+    });
+  }
+
+  let lastTime = 0;
+  let frameCount = 0;
+  function loop(t) {
+    if (!gameRunning) return;
+    const dt = t - lastTime;
+    lastTime = t;
+    frameCount++;
+
+    // 매 프레임 모션 감지 (알고리즘 자체를 가볍게 만들어서 부담 없음)
+    if (video.videoWidth) {
+      detectMotion();
+    }
+
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ===== 게임 흐름 =====
+  function showCountdown(callback) {
+    riNum.textContent = '🎮';
+    roundIntro.style.display = 'flex';
+
+    let count = 3;
+    riCountdown.textContent = count;
+    riCountdown.style.transform = 'scale(1.5)';
+    setTimeout(() => { riCountdown.style.transition = 'transform 0.3s'; riCountdown.style.transform = 'scale(1)'; }, 50);
+
+    const countdownTimer = setInterval(() => {
+      count--;
+      if (count > 0) {
+        riCountdown.textContent = count;
+        riCountdown.style.transition = 'none';
+        riCountdown.style.transform = 'scale(1.5)';
+        setTimeout(() => { riCountdown.style.transition = 'transform 0.3s'; riCountdown.style.transform = 'scale(1)'; }, 50);
+      } else if (count === 0) {
+        riCountdown.textContent = 'GO!';
+        riCountdown.style.transition = 'none';
+        riCountdown.style.transform = 'scale(1.5)';
+        setTimeout(() => { riCountdown.style.transition = 'transform 0.3s'; riCountdown.style.transform = 'scale(1)'; }, 50);
+      } else {
+        clearInterval(countdownTimer);
+        roundIntro.style.display = 'none';
+        callback();
+      }
+    }, 800);
+  }
+
+  function startGame() {
+    score = 0; combo = 0; totalSliced = 0;
+    timeLeft = GAME_CONFIG.time;
+    fruits = []; particles = []; slashTrail = []; popups = [];
+    completedSlashes = []; activeSlash = null;
+    lastMotionPoint = null; smoothedPoint = null;
+    motionVelocity = { x: 0, y: 0 };
+    swipeFrameCount = 0;
+    scoreEl.textContent = '0';
+    timerEl.textContent = timeLeft;
+    timerEl.style.color = '#BF360C';
+    comboEl.style.opacity = '0';
+    spawnInterval = GAME_CONFIG.spawnStart;
+    lastSpawn = 0;
+    gameRunning = true;
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+
+    if (gameTimer) clearInterval(gameTimer);
+    gameTimer = setInterval(() => {
+      timeLeft--;
+      timerEl.textContent = timeLeft;
+      if (timeLeft <= 5) timerEl.style.color = '#D32F2F';
+      if (timeLeft <= 0) finishGame();
+    }, 1000);
+  }
+
+  function finishGame() {
+    gameRunning = false;
+    clearInterval(gameTimer);
+
+    // 점수 저장 (반별 누적)
+    let myClassKey = null;
+    if (currentPlayer) {
+      myClassKey = saveScore(currentPlayer, score, totalSliced);
+      renderRanking();
+    }
+
+    // 반 등수 계산
+    const ranked = getRankedClasses();
+    let myRank = ranked.findIndex(c => c.classKey === myClassKey) + 1;
+    if (myRank === 0) myRank = ranked.length;
+    const myClass = ranked.find(c => c.classKey === myClassKey);
+
+    // 종료 화면 채우기
+    endEmoji.textContent = myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : '🏆';
+    endTitleText.textContent = myRank === 1 ? '우리 반이 1위! 🎉' : '게임 종료!';
+    endResultLabel.textContent = currentPlayer ? currentPlayer.classLabel + ' 이번 판 점수' : '이번 판 점수';
+    finalScoreEl.textContent = score;
+    finalStatsEl.textContent = '베어낸 오브젝트 ' + totalSliced + '개 · 반 누적 ' + (myClass ? myClass.totalScore : score) + '점';
+
+    // 등수 표시
+    document.getElementById('final-rank').textContent = myRank + '위';
+    const rankSubEl = document.getElementById('final-rank-sub');
+    const totalClasses = ranked.length;
+    if (myRank === 1) {
+      document.getElementById('final-rank').style.color = '#FFA000';
+      rankSubEl.textContent = '🎉 우리 반이 최고!';
+    } else if (myRank <= 3) {
+      document.getElementById('final-rank').style.color = '#E64A19';
+      rankSubEl.textContent = '🏅 TOP 3 진입!';
+    } else if (myRank <= 5) {
+      document.getElementById('final-rank').style.color = '#FF6F00';
+      rankSubEl.textContent = '⭐ TOP 5 진입!';
+    } else {
+      document.getElementById('final-rank').style.color = '#5D2F00';
+      rankSubEl.textContent = '총 ' + totalClasses + '개 반 중';
+    }
+
+    // TOP 5 리스트 (우리 반 강조)
+    renderEndRanking(myClassKey, myRank, totalClasses);
+
+    document.getElementById('end-screen').style.background = 'rgba(76, 175, 80, 0.92)';
+    endScreen.style.display = 'flex';
+  }
+
+  function renderEndRanking(myClassKey, myRank, totalClasses) {
+    const ranked = getRankedClasses();
+    const list = document.getElementById('end-ranking-list');
+    const outsideEl = document.getElementById('end-outside-rank');
+    list.innerHTML = '';
+    outsideEl.style.display = 'none';
+
+    const top5 = ranked.slice(0, 5);
+    top5.forEach((c, i) => {
+      const rankNum = i + 1;
+      const isMe = c.classKey === myClassKey;
+      const item = document.createElement('div');
+      item.className = 'end-rank-item rank-' + rankNum + (isMe ? ' is-me' : '');
+      const medal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum + '위';
+      const meBadge = isMe ? '<span class="me-badge">우리 반</span>' : '';
+      item.innerHTML = `
+        <div class="end-rank-num">${medal}</div>
+        <div class="end-rank-name">
+          <div class="name-line">${escapeHtml(c.classLabel)}${meBadge}</div>
+          <div class="class-line">${c.playCount}회 참여 · 최고 ${c.bestScore}점</div>
+        </div>
+        <div class="end-rank-score">${c.totalScore}점</div>
+      `;
+      list.appendChild(item);
+    });
+
+    // 5위 밖이면 우리 반 등수 별도 표시
+    if (myRank > 5) {
+      const myClass = ranked.find(c => c.classKey === myClassKey);
+      outsideEl.style.display = 'block';
+      outsideEl.innerHTML = `
+        <span style="color: #BF360C;">📍 ${escapeHtml(currentPlayer.classLabel)}은(는) </span>
+        <span style="color: #E64A19; font-size: 20px; font-weight: 900;">${myRank}위</span>
+        <span style="color: #BF360C;"> (누적 ${myClass ? myClass.totalScore : 0}점, 총 ${totalClasses}개 반 중)</span>
+      `;
+    }
+  }
+
+  function newGame() {
+    startScreen.style.display = 'none';
+    endScreen.style.display = 'none';
+    playerForm.style.display = 'flex';
+    resetPlayerForm();
+  }
+
+
+  // ================================================================
+  // 반 선택 폼 (반 대항전)
+  // ================================================================
+  const playerForm = document.getElementById('player-form');
+  const deptButtons = document.getElementById('dept-buttons');
+  const gradeStep = document.getElementById('grade-step');
+  const gradeButtons = document.getElementById('grade-buttons');
+  const classStep = document.getElementById('class-step');
+  const classButtons = document.getElementById('class-buttons');
+  const formStartBtn = document.getElementById('form-start-btn');
+  const formBackBtn = document.getElementById('form-back-btn');
+  const playerClassDisplay = document.getElementById('player-class-display');
+
+  // 학부 → 학년/반 매핑
+  const DEPT_CONFIG = {
+    '유치부': { grades: null, classes: [1, 2] },
+    '초등부': { grades: [1, 2, 3, 4, 5, 6], classes: [1, 2, 3] },
+    '중등부': { grades: [1, 2, 3], classes: [1, 2, 3] },
+    '고등부': { grades: [1, 2, 3], classes: [1, 2, 3] },
+    '전공과': { grades: [1, 2], classes: [1, 2, 3] }
+  };
+
+  let currentPlayer = null;
+  let formState = { dept: null, grade: null, classNum: null };
+
+  function renderDeptButtons() {
+    deptButtons.innerHTML = '';
+    Object.keys(DEPT_CONFIG).forEach(dept => {
+      const b = document.createElement('button');
+      b.className = 'opt-btn';
+      b.textContent = dept;
+      b.onclick = () => selectDept(dept, b);
+      deptButtons.appendChild(b);
+    });
+  }
+
+  function selectDept(dept, btn) {
+    formState.dept = dept;
+    formState.grade = null;
+    formState.classNum = null;
+    Array.from(deptButtons.children).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+
+    const cfg = DEPT_CONFIG[dept];
+    if (cfg.grades) {
+      // 학년 선택 단계
+      gradeStep.style.display = 'block';
+      gradeButtons.innerHTML = '';
+      cfg.grades.forEach(g => {
+        const b = document.createElement('button');
+        b.className = 'opt-btn';
+        b.textContent = g + '학년';
+        b.onclick = () => selectGrade(g, b);
+        gradeButtons.appendChild(b);
+      });
+      classStep.style.display = 'none';
+    } else {
+      // 유치부는 학년 없이 바로 반 선택
+      gradeStep.style.display = 'none';
+      formState.grade = null;
+      showClassStep();
+    }
+    updateStartButton();
+  }
+
+  function selectGrade(g, btn) {
+    formState.grade = g;
+    formState.classNum = null;
+    Array.from(gradeButtons.children).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    showClassStep();
+    updateStartButton();
+  }
+
+  function showClassStep() {
+    const cfg = DEPT_CONFIG[formState.dept];
+    classStep.style.display = 'block';
+    classButtons.innerHTML = '';
+    cfg.classes.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'opt-btn';
+      b.textContent = c + '반';
+      b.onclick = () => selectClass(c, b);
+      classButtons.appendChild(b);
+    });
+  }
+
+  function selectClass(c, btn) {
+    formState.classNum = c;
+    Array.from(classButtons.children).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    updateStartButton();
+  }
+
+  function updateStartButton() {
+    const ready = formState.dept && formState.classNum !== null;
+    formStartBtn.disabled = !ready;
+  }
+
+  function resetPlayerForm() {
+    formState = { dept: null, grade: null, classNum: null };
+    gradeStep.style.display = 'none';
+    classStep.style.display = 'none';
+    renderDeptButtons();
+    updateStartButton();
+  }
+
+  function formatPlayerClass(p) {
+    // "초등부 3학년 1반" 또는 "유치부 1반"
+    if (p.grade !== null && p.grade !== undefined) {
+      return p.dept + ' ' + p.grade + '학년 ' + p.classNum + '반';
+    }
+    return p.dept + ' ' + p.classNum + '반';
+  }
+
+  function getClassKey(p) {
+    // 반 고유 키 (반 대항 랭킹용)
+    return p.dept + '-' + (p.grade || 'X') + '-' + p.classNum;
+  }
+
+  formBackBtn.addEventListener('click', () => {
+    playerForm.style.display = 'none';
+    startScreen.style.display = 'flex';
+  });
+
+  formStartBtn.addEventListener('click', async () => {
+    if (formStartBtn.disabled) return;
+    currentPlayer = {
+      dept: formState.dept,
+      grade: formState.grade,
+      classNum: formState.classNum,
+      classKey: null,  // 아래서 설정
+      classLabel: null
+    };
+    currentPlayer.classKey = getClassKey(currentPlayer);
+    currentPlayer.classLabel = formatPlayerClass(currentPlayer);
+
+    playerClassDisplay.textContent = currentPlayer.classLabel;
+
+    playerForm.style.display = 'none';
+    showCountdown(startGame);
+  });
+
+  // ================================================================
+  // localStorage - 반별 누적 점수 (반 대항전)
+  // ================================================================
+  const STORAGE_KEY = 'fruit_slice_class_scores';
+
+  function loadClassScores() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+
+  function saveScore(player, score, sliced) {
+    const classScores = loadClassScores();
+    const key = player.classKey;
+
+    if (!classScores[key]) {
+      classScores[key] = {
+        classKey: key,
+        classLabel: player.classLabel,
+        dept: player.dept,
+        grade: player.grade,
+        classNum: player.classNum,
+        totalScore: 0,
+        playCount: 0,
+        bestScore: 0,
+        totalSliced: 0,
+        lastPlayed: Date.now()
+      };
+    }
+
+    classScores[key].totalScore += score;
+    classScores[key].playCount += 1;
+    classScores[key].totalSliced += sliced;
+    classScores[key].bestScore = Math.max(classScores[key].bestScore, score);
+    classScores[key].lastPlayed = Date.now();
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(classScores));
+    } catch (e) {
+      console.error('점수 저장 실패:', e);
+    }
+
+    return key;
+  }
+
+  function getRankedClasses() {
+    const classScores = loadClassScores();
+    return Object.values(classScores).sort((a, b) => {
+      if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+      return a.lastPlayed - b.lastPlayed;  // 동점이면 먼저 시작한 반 우선
+    });
+  }
+
+  function renderRanking() {
+    const ranked = getRankedClasses();
+    const list = document.getElementById('ranking-list');
+    list.innerHTML = '';
+
+    if (ranked.length === 0) {
+      list.innerHTML = '<div style="text-align: center; color: #999; padding: 16px; font-size: 13px;">아직 참여한 반이 없어요<br/>첫 번째 반이 되어보세요!</div>';
+      return;
+    }
+
+    const top5 = ranked.slice(0, 5);
+    top5.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'rank-item rank-' + (i + 1);
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      item.innerHTML = `
+        <div class="rank-num">${medal}</div>
+        <div class="rank-name">
+          <div>${escapeHtml(s.classLabel)}</div>
+          <div class="rank-class">${s.playCount}회 참여</div>
+        </div>
+        <div class="rank-score">${s.totalScore}</div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ================================================================
+  // 시작 버튼 / 재시작
+  // ================================================================
+  startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true;
+    startBtn.textContent = '카메라 준비 중...';
+    await initCam();
+    setTimeout(() => {
+      startBtn.disabled = false;
+      startBtn.textContent = '우리 반 선택하기';
+      newGame();
+    }, 800);
+  });
+
+  restartBtn.addEventListener('click', () => {
+    // 한번 더 - 같은 플레이어로 즉시 재시작
+    endScreen.style.display = 'none';
+    showCountdown(startGame);
+  });
+
+  document.getElementById('exit-btn').addEventListener('click', () => {
+    // 종료 - 시작 화면으로 돌아가 새 반이 시작
+    endScreen.style.display = 'none';
+    currentPlayer = null;
+    playerClassDisplay.textContent = '-';
+    startScreen.style.display = 'flex';
+  });
+
+  // 초기화
+  renderDeptButtons();
+  renderRanking();
+  initCam();
+})();
+</script>
+</body>
+</html>
